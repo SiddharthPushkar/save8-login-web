@@ -312,9 +312,9 @@
     .avatar-slot { left: 76.5%; top: 1.6%; width: 20.5%; height: 5.4%; padding-right: 1.5%; }
 
     /* Specs from Figma P2–P7 / PE1–PE3 (phone view, 390 wide) */
-    /* The overlay follows the *visible* viewport (--vv-top / --vvh from visualViewport in JS),
-       so with the on-screen keyboard open the sheet sits right on top of it on iOS and Android. */
-    .overlay { align-items: flex-end; top: var(--vv-top, 0px); bottom: auto; height: 100vh; height: var(--vvh, 100dvh); }
+    /* Keyboard: the page and the overlay stay put (JS cancels the browser's pan-to-input) and only the sheet
+       slides up by the keyboard's height (--kb, from visualViewport), so nothing behind it jumps. */
+    .overlay { align-items: flex-end; padding-bottom: var(--kb, 0px); transition: padding-bottom .26s cubic-bezier(.2,.8,.2,1); }
     .dialog-wrap { width: 100%; max-height: 100%; max-width: 560px; }   /* landscape: don't stretch the sheet edge to edge */
     .close { right: 13px; top: -52px; }
     .dialog {
@@ -570,6 +570,7 @@
     overlay.classList.add("open");
     showPhone({ enter: false });
     startCarousel();
+    fit();
   }
   async function close() {
     if (!overlay.classList.contains("open") || closing) return;
@@ -584,6 +585,7 @@
     wrap.style.transform = "";
     unlockScroll();
     closing = false;
+    fit();                                   // clear the keyboard offset
     lastFocus && lastFocus.focus({ preventScroll: true });
   }
 
@@ -990,18 +992,29 @@
   // or the whole layout viewport (Samsung Internet, Firefox, some WebViews): compare against the tallest
   // height seen for the current width while an input has focus.
   const tallest = {};
+  const sheetOpen = () => overlay.classList.contains("open") && isPhone();
+  // iOS Safari (and some Android browsers) pan the whole page up to reveal a focused input near the bottom.
+  // That pan is what made the screen "shift"; undo it while the sheet is open.
+  const unpan = () => {
+    if (!sheetOpen()) return;
+    const vv = window.visualViewport;
+    if (window.scrollY !== 0 || (vv && vv.offsetTop > 0)) window.scrollTo(0, 0);
+  };
   const fit = () => {
+    unpan();
     const vv = window.visualViewport;
     const h = vv ? vv.height : window.innerHeight;
-    const top = vv ? vv.offsetTop : 0;
     const w = Math.round(window.innerWidth);
     tallest[w] = Math.max(tallest[w] || 0, h, window.innerHeight);
     root.style.setProperty("--vvh", h + "px");
-    root.style.setProperty("--vv-top", top + "px");
+    // keyboard height = part of the layout viewport hidden under the keyboard (0 when the browser resizes the layout instead)
+    const kbH = sheetOpen() ? Math.max(0, Math.round(window.innerHeight - h - (vv ? vv.offsetTop : 0))) : 0;
+    root.style.setProperty("--kb", (kbH > 60 ? kbH : 0) + "px");
     const typing = document.activeElement && document.activeElement.tagName === "INPUT";
     const kbOpen = isPhone() && typing && (h < tallest[w] * 0.85 || window.innerHeight - h > 120);
     root.classList.toggle("kb", !!kbOpen);
-    root.classList.toggle("short", isPhone() && h < 520);
+    // compact mode only for landscape phones or really tiny heights, so portrait phones don't reflow when the keyboard opens
+    root.classList.toggle("short", isPhone() && (h < 360 || (window.innerWidth > window.innerHeight && h < 520)));
     if (menuOpen && menuOpen()) placeMenu();
   };
   fit();
@@ -1011,8 +1024,10 @@
   }
   window.addEventListener("resize", fit);
   window.addEventListener("orientationchange", () => setTimeout(fit, 250));
-  document.addEventListener("focusin", () => setTimeout(fit, 300));    // some Android builds resize late
+  // on focus, cancel the pan immediately and again as the keyboard finishes animating (iOS pans in steps)
+  document.addEventListener("focusin", () => { unpan(); [50, 150, 300, 500].forEach(t => setTimeout(fit, t)); });
   document.addEventListener("focusout", () => setTimeout(fit, 300));
+  window.addEventListener("scroll", unpan, { passive: true });
 
   // field focus ring without :has() (older Safari / Firefox)
   phone.addEventListener("focus", () => phoneField.classList.add("focused"));
