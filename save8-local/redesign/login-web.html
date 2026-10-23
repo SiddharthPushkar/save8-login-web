@@ -2,7 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#025332" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1D14" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no">
+<link rel="icon" type="image/png" href="assets-login/app-icon.png">
+<link rel="apple-touch-icon" href="assets-login/app-icon.png">
+<script>
+  // Theme before first paint: ?theme=dark|light, then a saved choice, then the system setting.
+  (function () {
+    var q = new URLSearchParams(location.search).get("theme"), saved = null;
+    try { saved = localStorage.getItem("save8-theme"); } catch (e) {}
+    var t = q === "dark" || q === "light" ? q : saved === "dark" || saved === "light" ? saved
+          : (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
 <title>Save8 · Web login</title>
 <style>
   @font-face { font-family: "Inter"; src: url("assets-login/inter.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
@@ -12,7 +28,7 @@
     --ink: #0E0F0C;
     --body: #454745;
     --muted: #6A6C6A;
-    --placeholder: #A3A5A2;
+    --placeholder: #767874;   /* QA: 4.5:1 on white (was #A3A5A2, 2.5:1) */
     --page: #F7F4ED;
     --surface: #FFFFFF;
     --line: rgba(14, 15, 12, .12);
@@ -25,17 +41,46 @@
     --disabled-bg: rgba(14, 15, 12, .05);
     --disabled-fg: rgba(14, 15, 12, .32);
     --radius-lg: 14px;
+    --bg: #F7F4ED;
+    --tint: rgba(14, 15, 12, .05);          /* hover / highlighted rows */
+    --tint-soft: rgba(14, 15, 12, .04);     /* search box */
+    --dot: rgba(14, 15, 12, .2);
+    --grabber: rgba(14, 15, 12, .15);
+    --surface-hover: #FAFAF8;
+    --outline-bg: #FFFFFF;
+    --outline-border: #0E0F0C;
+    --scrim: 14, 15, 12;
+    --scrim-alpha: .55;
+    --shadow: rgba(14, 15, 12, .16);
+    color-scheme: light;
+  }
+  /* Dark theme: the user's dark palette from the Figma dark frames. Follows the system unless the page forces a theme. */
+  :root[data-theme="dark"] {
+    --ink: #F6F4EE; --body: #C4C1B8; --muted: #A3A097; --placeholder: #8B8A83;
+    --page: #20221D; --surface: #161814; --bg: #0B0C0A;
+    --line: rgba(246, 244, 238, .12); --line-strong: rgba(246, 244, 238, .2);
+    --link: #7FA7FF; --green: #43D895; --red: #F87171; --header-green: #0B1D14;
+    --disabled-bg: rgba(246, 244, 238, .06); --disabled-fg: rgba(246, 244, 238, .32);
+    --tint: rgba(246, 244, 238, .07); --tint-soft: rgba(246, 244, 238, .05);
+    --dot: rgba(246, 244, 238, .25); --grabber: rgba(246, 244, 238, .2);
+    --surface-hover: #1E201B; --outline-bg: #1C1C1E; --outline-border: rgba(244, 244, 245, .2);
+    --scrim: 0, 0, 0; --scrim-alpha: .62; --shadow: rgba(0, 0, 0, .5);
+    color-scheme: dark;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; }
+  html, body { margin: 0; min-height: 100%; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body {
-    font-family: "Inter", system-ui, sans-serif;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     color: var(--ink);
-    background: var(--page);
+    background: var(--bg);
     -webkit-font-smoothing: antialiased;
   }
-  button { font: inherit; color: inherit; cursor: pointer; }
+  /* page behind the sheet can't scroll while it's open (iOS needs position:fixed) */
+  html.locked, html.locked body { overflow: hidden; }
+  html.locked body { position: fixed; left: 0; right: 0; }
+  button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
   button:disabled { cursor: default; }
 
   /* ---------- Live home (screenshot of save8.ai, light theme) ---------- */
@@ -47,6 +92,7 @@
     left: 93.37%; top: 1.556%; width: 4.96%; height: 4.22%;
   }
   .hotspot:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  .theme-spot { left: 90%; top: 1.6%; width: 2.6%; height: 4.2%; }
   .avatar-slot {
     position: absolute; display: none; align-items: center; justify-content: flex-end;
     left: 92.9%; top: .9%; width: 5.8%; height: 5.6%; background: var(--header-green);
@@ -56,13 +102,13 @@
     width: 38px; height: 38px; border-radius: 50%; background: var(--orange); color: #fff;
     display: grid; place-items: center; font-weight: 600; font-size: 16px;
   }
-  body.signed-in .hotspot { display: none; }
+  body.signed-in #loginBtn { display: none; }
   body.signed-in .avatar-slot { display: flex; }
 
   /* ---------- Overlay ---------- */
   .overlay {
     position: fixed; inset: 0; z-index: 10; display: none;
-    background: rgba(14, 15, 12, calc(.55 * var(--scrim, 1)));   /* --scrim drops while the sheet is dragged */
+    background: rgba(var(--scrim), calc(var(--scrim-alpha) * var(--drag, 1)));   /* --drag drops while the sheet is dragged */
     align-items: center; justify-content: center;
   }
   .overlay.open { display: flex; animation: fade .18s ease-out; }
@@ -78,7 +124,7 @@
   .close {
     position: absolute; right: 0; top: -52px;
     width: 40px; height: 40px; border-radius: 50%; border: 0;
-    background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.2);
+    background: var(--surface); color: var(--ink); box-shadow: 0 4px 12px rgba(0,0,0,.2);
     display: grid; place-items: center;
   }
   .close svg { width: 18px; height: 18px; }
@@ -116,7 +162,7 @@
   /* Zoomed illustration, as in Figma: 416×394 at (-22, 86) in the 372×504 card, bleeding past the card edges */
   .slide img { position: absolute; left: -22px; top: 86px; width: 416px; height: 394px; object-fit: contain; border-radius: 16px; margin: 0; }
   .dots { position: absolute; left: 28px; bottom: 28px; z-index: 2; display: flex; gap: 6px; }
-  .dots button { width: 6px; height: 6px; padding: 0; border: 0; border-radius: 3px; background: rgba(14,15,12,.2); transition: width .25s, background .25s; }
+  .dots button { width: 6px; height: 6px; padding: 0; border: 0; border-radius: 3px; background: var(--dot); transition: width .25s, background .25s; }
   .dots button.active { width: 18px; background: var(--ink); }
 
   /* Form column */
@@ -143,18 +189,19 @@
   .back {
     position: absolute; left: 16px; top: 16px;
     width: 40px; height: 40px; border-radius: 50%;
-    background: #fff; border: 1px solid var(--line-strong);
-    display: grid; place-items: center;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong);
+    display: grid; place-items: center; z-index: 2;
   }
   .back svg { width: 18px; height: 18px; }
 
   /* Phone field */
   .phone {
     width: 100%; height: 58px; border-radius: var(--radius-lg);
-    border: 1px solid var(--line); background: #fff;
+    border: 1px solid var(--line); background: var(--surface);
     display: flex; align-items: center; gap: 0; padding: 0 16px;
   }
-  .phone:has(#phone:focus) { border: 1.5px solid var(--link); padding: 0 15.5px; }
+  /* .focused is set from JS (works in browsers without :has) */
+  .phone.focused { border: 1.5px solid var(--link); padding: 0 15.5px; }
   .flag { width: 22px; height: 16px; border-radius: 2px; overflow: hidden; flex: none; display: block; box-shadow: 0 0 0 .5px rgba(14,15,12,.12); }
   .flag svg { display: block; width: 100%; height: 100%; }
   .cc { font-weight: 500; font-size: 17px; margin-left: 8px; }
@@ -165,21 +212,24 @@
     display: flex; align-items: center; height: 40px; margin-left: -8px; padding: 0 8px;
     border: 0; background: transparent; border-radius: 10px; transition: background-color .15s;
   }
-  .cc-btn:hover, .cc-btn[aria-expanded="true"] { background: rgba(14,15,12,.05); }
-  .cc-btn .chev { width: 16px; height: 16px; margin-left: 4px; transition: transform .2s ease; }
+  .cc-btn:hover, .cc-btn[aria-expanded="true"] { background: var(--tint); }
+  .cc-btn .chev { width: 16px; height: 16px; margin-left: 4px; color: var(--muted); transition: transform .2s ease; }
   .cc-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
   .phone .divider { margin-left: 4px; }   /* button's 8px right padding + 4 = 12px to the divider */
   .cc-menu {
     position: absolute; left: -1px; right: -1px; top: calc(100% + 8px); z-index: 5; cursor: default;
-    background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 8px;
-    box-shadow: 0 16px 40px rgba(14,15,12,.16), 0 2px 6px rgba(14,15,12,.06);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 8px;
+    box-shadow: 0 16px 40px var(--shadow), 0 2px 6px rgba(14,15,12,.06);
     transform-origin: top center; animation: menu-in .18s cubic-bezier(.2,.8,.2,1);
   }
   .cc-menu[hidden] { display: none; }
+  .cc-menu.up { top: auto; bottom: calc(100% + 8px); transform-origin: bottom center; }   /* flipped when there's no room below */
+  .cc-menu.down { top: calc(100% + 8px); bottom: auto; transform-origin: top center; }
   @keyframes menu-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
-  .cc-search { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; background: rgba(14,15,12,.04); margin-bottom: 6px; }
-  .cc-search svg { width: 16px; height: 16px; flex: none; }
-  .cc-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 15px; color: var(--ink); }
+  .cc-search { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; background: var(--tint-soft); margin-bottom: 6px; }
+  .cc-search svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+  /* 16px minimum on inputs so iOS Safari doesn't zoom in on focus */
+  .cc-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 16px; color: var(--ink); }
   .cc-search input::placeholder { color: var(--placeholder); }
   .cc-list { list-style: none; margin: 0; padding: 0; max-height: 232px; overflow-y: auto; overscroll-behavior: contain; }
   .cc-list li {
@@ -191,7 +241,7 @@
   .cc-list li .tick { width: 18px; height: 18px; flex: none; visibility: hidden; }
   .cc-list li[aria-selected="true"] { font-weight: 600; }
   .cc-list li[aria-selected="true"] .tick { visibility: visible; }
-  .cc-list li.hl { background: rgba(14,15,12,.05); }
+  .cc-list li.hl { background: var(--tint); }
   .cc-empty { margin: 8px 10px 10px; color: var(--muted); font-size: 14px; }
   .divider { width: 1px; height: 24px; background: var(--line); margin: 0 12px; }   /* 12px either side, as in Figma */
   .phone input {
@@ -208,15 +258,15 @@
   .btn-primary { background: var(--orange); color: #fff; }
   .btn-primary:hover:not(:disabled) { filter: brightness(.96); }
   .btn-primary:disabled { background: var(--disabled-bg); color: var(--disabled-fg); }
-  .btn-outline { background: #fff; color: var(--ink); border: 1px solid var(--ink); border-radius: 999px; }
-  .btn-outline:hover { background: rgba(14,15,12,.03); }
+  .btn-outline { background: var(--outline-bg); color: var(--ink); border: 1px solid var(--outline-border); border-radius: 999px; }
+  .btn-outline:hover { background: var(--surface-hover); }
   .btn svg { width: 20px; height: 20px; flex: none; }
 
   /* Code field */
   .code-block { width: 100%; display: flex; flex-direction: column; gap: 12px; }
   .code {
     position: relative; width: 100%; height: 58px; border-radius: var(--radius-lg);
-    border: 1px solid var(--line); background: #fff; display: flex; align-items: center; padding: 0 16px 0 18px;
+    border: 1px solid var(--line); background: var(--surface); display: flex; align-items: center; padding: 0 16px 0 18px;
   }
   .code.focus { border: 1.5px solid var(--link); padding: 0 15.5px 0 17.5px; }
   .code.ok { border: 1.5px solid var(--green); padding: 0 15.5px 0 17.5px; }
@@ -245,29 +295,34 @@
   /* Toast */
   .toast {
     position: fixed; left: 50%; bottom: 40px; transform: translate(-50%, 16px); opacity: 0; z-index: 20;
-    background: #fff; color: var(--ink); border-radius: 14px; padding: 12px 18px 12px 14px;
+    background: var(--surface); color: var(--ink); border-radius: 14px; padding: 12px 18px 12px 14px;
     display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; white-space: nowrap;
     box-shadow: 0 8px 24px rgba(0,0,0,.16); transition: opacity .25s, transform .25s; pointer-events: none;
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   .toast svg { width: 20px; height: 20px; }
 
-  /* ---------- Phone view: bottom sheet ---------- */
-  @media (max-width: 767px) {
+  /* ---------- Phone view: bottom sheet (also landscape phones, which are wide but short) ---------- */
+  @media (max-width: 767px), (max-height: 500px) and (orientation: landscape) {
+    .form, .step-phone, .step-otp, .dialog > * { min-width: 0; }   /* QA: stops the sheet overflowing narrow phones (≤405px) */
     .home .shot-desktop { display: none !important; }
     .home .shot-mobile { display: block !important; }
     .hotspot { left: 77.56%; top: 2.03%; width: 18.3%; height: 4.81%; }
+    .theme-spot { left: 66.4%; top: 2.2%; width: 9.2%; height: 4.5%; }
     .avatar-slot { left: 76.5%; top: 1.6%; width: 20.5%; height: 5.4%; padding-right: 1.5%; }
 
     /* Specs from Figma P2–P7 / PE1–PE3 (phone view, 390 wide) */
-    .overlay { align-items: flex-end; }
-    .dialog-wrap { width: 100%; }
+    /* The overlay follows the *visible* viewport (--vv-top / --vvh from visualViewport in JS),
+       so with the on-screen keyboard open the sheet sits right on top of it on iOS and Android. */
+    .overlay { align-items: flex-end; top: var(--vv-top, 0px); bottom: auto; height: 100vh; height: var(--vvh, 100dvh); }
+    .dialog-wrap { width: 100%; max-height: 100%; max-width: 560px; }   /* landscape: don't stretch the sheet edge to edge */
     .close { right: 13px; top: -52px; }
     .dialog {
       width: 100%; height: auto; padding: 0; border-radius: 28px 28px 0 0;
       padding-bottom: env(safe-area-inset-bottom);
       touch-action: none;           /* the sheet itself can be dragged down to dismiss */
     }
+    html.kb .dialog { padding-bottom: 0; }   /* keyboard up: the home-indicator inset sits under the keyboard */
     .overlay.open .dialog-wrap { animation: up .32s cubic-bezier(.2,.9,.25,1); }
     .overlay.closing .dialog-wrap { animation: down .24s ease-in forwards; }
     @keyframes up { from { transform: translateY(100%); } to { transform: none; } }
@@ -279,16 +334,32 @@
     .grabber { display: block !important; }
 
     /* Sign-in sheet: title 36px from the top, 16 to the field, 12 to Continue */
-    .step-phone { padding: 36px 16px 86px; }
+    .step-phone { padding: 36px 16px 24px; }   /* + the sheet's safe-area inset (home bar) on phones that have one */
+    html.kb .step-phone { padding-bottom: 16px; }   /* keyboard up: Continue sits 16px above it */
     .step-phone .col { gap: 12px; }
     .step-phone .title { font-size: 28px; line-height: 32px; text-align: left; margin-bottom: 4px; }
     /* on phones the list opens upward so it never sits under the keyboard */
     .cc-menu { top: auto; bottom: calc(100% + 8px); transform-origin: bottom center; animation-name: menu-up; }
-    .cc-list { max-height: min(232px, 40vh); }
     @keyframes menu-up { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
 
     /* OTP: expanded sheet from 50px, back 16px in, title at 74px, Verify pinned to the bottom */
-    .overlay.otp .dialog { min-height: calc(100dvh - 50px); border-radius: 24px 24px 0 0; }
+    .overlay.otp .dialog { min-height: calc(100vh - 50px); min-height: calc(var(--vvh, 100dvh) - 50px); border-radius: 24px 24px 0 0; }
+    html.kb .overlay.otp .dialog { min-height: calc(var(--vvh, 100dvh) - 8px); }   /* keyboard up: use all the visible height */
+    html.kb .step-otp { padding-top: 64px; padding-bottom: 16px; }
+    html.kb .step-otp .heading { margin-bottom: 20px; }
+
+    /* Very short visible height (landscape phone, keyboard up): the sheet scrolls instead of being cut off,
+       the close button moves inside it and the OTP sheet stops forcing full height. */
+    html.short .dialog { max-height: var(--vvh, 100dvh); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+    html.short .close { top: 8px; right: 8px; z-index: 3; width: 36px; height: 36px; box-shadow: none; background: var(--tint); }
+    html.short .grabber { display: none !important; }
+    html.short .step-phone { padding: 20px 16px 16px; }
+    html.short .step-phone .title { font-size: 22px; line-height: 26px; padding-right: 44px; }
+    html.short .overlay.otp .dialog { min-height: 0; }
+    html.short .step-otp { padding: 60px 16px 16px; }
+    html.short .step-otp .heading { margin-bottom: 12px; }
+    html.short .step-otp .verify-wrap { margin-top: 16px; padding-top: 0; }
+    html.short .cc-menu { top: calc(100% + 8px); bottom: auto; animation-name: menu-in; }
     .overlay.otp .close { display: none; }
     .step-otp { padding: 74px 16px 38px; }
     .step-otp .col { gap: 0; flex: 1; }
@@ -302,13 +373,21 @@
     .step-otp .resend { gap: 12px; margin-top: -2px; }
     .step-otp .verify-wrap { margin-top: auto; padding-top: 24px; }
   }
-  .grabber { display: none; position: absolute; left: 50%; top: 8px; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: rgba(14,15,12,.15); }
+  /* Short desktop/tablet windows (or landscape phones over 768px): the popup scrolls instead of being cut off */
+  @media (min-width: 768px) and (min-height: 501px) and (max-height: 600px) {
+    .overlay { align-items: flex-start; overflow-y: auto; padding: 64px 0 24px; }
+  }
+  @media (min-width: 768px) and (max-width: 900px) and (min-height: 501px) {
+    .dialog { width: calc(100vw - 48px); }
+    .visual { width: 42%; }
+  }
+  .grabber { display: none; position: absolute; left: 50%; top: 8px; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: var(--grabber); }
 
   /* ---------- Interaction states ---------- */
   .btn, .close, .back, .dots button { transition: transform .1s ease, background-color .2s, color .2s, filter .2s, box-shadow .2s; }
   .btn:active:not(:disabled), .close:active, .back:active { transform: scale(.97); }
   .close:hover, .back:hover { box-shadow: 0 6px 16px rgba(0,0,0,.18); }
-  .back:hover { background: #FAFAF8; }
+  .back:hover { background: var(--surface-hover); }
   .phone, .code { transition: border-color .2s, box-shadow .2s; }
   .code.ok .check { animation: pop-in .36s cubic-bezier(.2,1.6,.4,1); }
   @keyframes pop-in { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -340,16 +419,18 @@
 
 <!-- Live save8.ai home, light theme (captured 23 Oct 2026) -->
 <main class="home" aria-label="Save8 home">
-  <img class="shot shot-desktop" src="assets-login/home-desktop.png" alt="Save8 home page: Never Overpay Again">
-  <img class="shot shot-mobile" src="assets-login/home-mobile.png" alt="Save8 home page: Never Overpay Again">
+  <img class="shot shot-desktop" src="assets-login/home-desktop.png" data-light="assets-login/home-desktop.png" data-dark="assets-login/home-desktop-dark.png" alt="Save8 home page: Never Overpay Again">
+  <img class="shot shot-mobile" src="assets-login/home-mobile.png" data-light="assets-login/home-mobile.png" data-dark="assets-login/home-mobile-dark.png" alt="Save8 home page: Never Overpay Again">
   <button class="hotspot" id="loginBtn" aria-label="Login" aria-haspopup="dialog"></button>
+  <!-- the live site's display button (monitor icon) switches light / dark -->
+  <button class="hotspot theme-spot" id="themeBtn" aria-label="Switch light or dark theme"></button>
   <div class="avatar-slot" aria-label="Signed in"><div class="avatar">R</div></div>
 </main>
 
 <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
   <div class="dialog-wrap">
     <button class="close" id="closeBtn" aria-label="Close">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="#0E0F0C" stroke-width="2" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
 
     <div class="dialog">
@@ -357,9 +438,9 @@
       <aside class="visual" aria-label="Why Save8">
         <div class="slides" aria-roledescription="carousel">
           <div class="track">
-            <div class="slide active"><h2>Share any product, get the lowest price</h2><img src="assets-login/slide-1.png" alt="" draggable="false"></div>
-            <div class="slide"><h2>Save more with gift cards and coupons</h2><img src="assets-login/slide-2.png" alt="" draggable="false"></div>
-            <div class="slide"><h2>Pay with the card that saves you the most</h2><img src="assets-login/slide-3.png" alt="" draggable="false"></div>
+            <div class="slide active"><h2>Share any product, get the lowest price</h2><img src="assets-login/slide-1.png" data-light="assets-login/slide-1.png" data-dark="assets-login/slide-1-dark.png" alt="" draggable="false"></div>
+            <div class="slide"><h2>Save more with gift cards and coupons</h2><img src="assets-login/slide-2.png" data-light="assets-login/slide-2.png" data-dark="assets-login/slide-2-dark.png" alt="" draggable="false"></div>
+            <div class="slide"><h2>Pay with the card that saves you the most</h2><img src="assets-login/slide-3.png" data-light="assets-login/slide-3.png" data-dark="assets-login/slide-3-dark.png" alt="" draggable="false"></div>
           </div>
         </div>
         <div class="dots" role="tablist">
@@ -377,15 +458,15 @@
             <button class="cc-btn" id="ccBtn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="ccMenu" aria-label="Country code: India +91">
               <span class="flag" id="ccFlag"></span>
               <span class="cc" id="ccCode">+91</span>
-              <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="#6A6C6A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <span class="divider"></span>
-            <input id="phone" type="tel" inputmode="numeric" autocomplete="tel-national" placeholder="Mobile number" maxlength="11" aria-label="Mobile number">
+            <input id="phone" type="tel" inputmode="numeric" pattern="[0-9 ]*" autocomplete="tel-national" enterkeyhint="go" placeholder="Mobile number" maxlength="16" aria-label="Mobile number">
 
             <!-- Country code dropdown -->
             <div class="cc-menu" id="ccMenu" hidden>
               <div class="cc-search">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="#6A6C6A" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="#6A6C6A" stroke-width="2" stroke-linecap="round"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 <input id="ccSearch" type="text" placeholder="Search country or code" aria-label="Search country or code" autocomplete="off">
               </div>
               <ul class="cc-list" id="ccList" role="listbox" aria-label="Country code"></ul>
@@ -403,7 +484,7 @@
       <section class="form step-otp hidden" id="stepOtp">
         <span class="grabber"></span>
         <button class="back" id="backBtn" aria-label="Back">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M15 18 9 12l6-6" stroke="#0E0F0C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M15 18 9 12l6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div class="col">
           <img class="app-icon" src="assets-login/app-icon.png" alt="Save8">
@@ -413,7 +494,7 @@
           </div>
           <div class="code-block">
             <div class="code focus" id="codeBox">
-              <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="4-digit code" aria-label="4-digit code" aria-describedby="codeMsg">
+              <input id="code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" enterkeyhint="done" maxlength="4" placeholder="4-digit code" aria-label="4-digit code" aria-describedby="codeMsg">
               <svg class="state spin" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="9" stroke="#000B80" stroke-opacity=".15" stroke-width="2.5"/><path d="M11 2a9 9 0 0 1 9 9" stroke="#000B80" stroke-width="2.5" stroke-linecap="round"/></svg>
               <svg class="state check" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#007A45"/><path d="m7 12.5 3.2 3.2L17 9" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <svg class="state bang" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#BF1E2C"/><path d="M12 7v6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="17" r="1.3" fill="#fff"/></svg>
@@ -425,7 +506,7 @@
             </div>
             <div class="resend hidden" id="resendBox">
               <button class="btn btn-outline" id="resendSms" type="button">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H9l-4.2 3.4A.5.5 0 0 1 4 19V5.5Z" fill="#0E0F0C"/><path d="M8 8.5h8M8 11.5h5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+                <svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H9l-4.2 3.4A.5.5 0 0 1 4 19V5.5Z" fill="currentColor"/><path d="M8 8.5h8M8 11.5h5" stroke="var(--outline-bg)" stroke-width="1.6" stroke-linecap="round"/></svg>
                 Resend via SMS
               </button>
               <button class="btn btn-outline" id="resendWa" type="button">
@@ -460,18 +541,32 @@
   const phone = $("phone"), continueBtn = $("continueBtn");
   const code = $("code"), codeBox = $("codeBox"), verifyBtn = $("verifyBtn");
   const errorLine = $("errorLine"), resendLine = $("resendLine"), statusLine = $("statusLine"), resendBox = $("resendBox");
-  const isPhone = () => matchMedia("(max-width: 767px)").matches;
+  const isPhone = () => matchMedia("(max-width: 767px), (max-height: 500px) and (orientation: landscape)").matches;
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const wait = ms => new Promise(r => setTimeout(r, reduced() ? 0 : ms));
   let attemptsLeft = 3, timerId = null, carouselId = null, busy = false, lastFocus = null, closing = false;
 
   // ---- open / close (animated both ways) ----
+  // lock the page behind the popup / sheet (position:fixed is what stops iOS Safari scrolling it)
+  let lockedY = 0;
+  function lockScroll() {
+    lockedY = window.scrollY || 0;
+    document.body.style.top = -lockedY + "px";
+    document.documentElement.classList.add("locked");
+  }
+  function unlockScroll() {
+    document.documentElement.classList.remove("locked");
+    document.body.style.top = "";
+    window.scrollTo(0, lockedY);
+  }
+
   function open() {
     if (overlay.classList.contains("open")) return;
     lastFocus = document.activeElement;
     overlay.classList.remove("closing");
-    overlay.style.removeProperty("--scrim");
+    overlay.style.removeProperty("--drag");
     wrap.style.transform = "";
+    lockScroll();
     overlay.classList.add("open");
     showPhone({ enter: false });
     startCarousel();
@@ -480,14 +575,39 @@
     if (!overlay.classList.contains("open") || closing) return;
     closing = true;
     closeMenu(false);
-    stopTimer(); stopCarousel();
+    stopTimer(); stopCarousel(); stopWebOtp();
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();   // drop the keyboard first
     overlay.classList.add("closing");
     await wait(240);
     overlay.classList.remove("open", "closing", "otp");
-    overlay.style.removeProperty("--scrim");
+    overlay.style.removeProperty("--drag");
     wrap.style.transform = "";
+    unlockScroll();
     closing = false;
-    lastFocus && lastFocus.focus();
+    lastFocus && lastFocus.focus({ preventScroll: true });
+  }
+
+  // ---- theme: system by default; the live site's display button toggles and remembers it ----
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    document.querySelectorAll("img[data-dark]").forEach(img => {
+      const src = t === "dark" ? img.dataset.dark : img.dataset.light;
+      if (img.getAttribute("src") !== src) img.setAttribute("src", src);
+    });
+  }
+  applyTheme(document.documentElement.getAttribute("data-theme") || "light");
+  $("themeBtn").addEventListener("click", () => {
+    const t = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    try { localStorage.setItem("save8-theme", t); } catch (e) {}
+    applyTheme(t);
+  });
+  if (window.matchMedia) {
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    const follow = e => {
+      let saved = null; try { saved = localStorage.getItem("save8-theme"); } catch (_) {}
+      if (!saved && !new URLSearchParams(location.search).get("theme")) applyTheme(e.matches ? "dark" : "light");
+    };
+    mq.addEventListener ? mq.addEventListener("change", follow) : mq.addListener(follow);   // older Safari
   }
   $("loginBtn").addEventListener("click", open);
   $("closeBtn").addEventListener("click", close);
@@ -593,9 +713,21 @@
     if (li) { li.scrollIntoView({ block: "nearest" }); ccSearch.setAttribute("aria-activedescendant", li.id); }
   }
   const menuOpen = () => !ccMenu.hidden;
+  // open the list on whichever side of the field has room, and cap its height to that room
+  function placeMenu() {
+    const vv = window.visualViewport;
+    const visTop = vv ? vv.offsetTop : 0, visBottom = visTop + (vv ? vv.height : window.innerHeight);
+    const f = phoneField.getBoundingClientRect();
+    const below = visBottom - f.bottom - 16, above = f.top - visTop - 16;
+    const chrome = 8 + 16 + 46;                       // gap + menu padding + search row
+    const up = document.documentElement.classList.contains("short") ? false
+             : isPhone() ? above >= 180 || above > below : below < 260 && above > below;
+    ccMenu.classList.toggle("up", up); ccMenu.classList.toggle("down", !up);
+    ccList.style.maxHeight = Math.max(88, Math.min(232, (up ? above : below) - chrome)) + "px";
+  }
   function openMenu() {
     ccMenu.hidden = false; ccBtn.setAttribute("aria-expanded", "true");
-    ccSearch.value = ""; renderList();
+    ccSearch.value = ""; renderList(); placeMenu();
     if (!isPhone()) ccSearch.focus();   // on phones, don't pop the keyboard just to show the list
   }
   function closeMenu(focusInput = true) {
@@ -608,8 +740,9 @@
     $("ccFlag").innerHTML = flagSvg(c.iso);
     $("ccCode").textContent = c.code;
     ccBtn.setAttribute("aria-label", `Country code: ${c.name} ${c.code}`);
-    phone.maxLength = c.iso === "IN" ? 11 : c.len[1];
-    phone.dispatchEvent(new Event("input"));   // re-check the number for the new country
+    picking = true;                              // re-check the number for the new country without losing digits
+    phone.dispatchEvent(new Event("input"));
+    picking = false;
     closeMenu();
   }
   ccBtn.addEventListener("click", e => { e.stopPropagation(); menuOpen() ? closeMenu() : openMenu(); });
@@ -625,10 +758,13 @@
   document.addEventListener("pointerdown", e => { if (menuOpen() && !e.target.closest(".cc-menu, .cc-btn")) closeMenu(false); });
 
   // ---- step 1: phone ----
-  const digits = v => v.replace(/\D/g, "").slice(0, country.len[1]);
+  // `typed` keeps what the user entered, so switching to a shorter country and back doesn't drop digits
+  let typed = "", picking = false;
   const pretty = d => country.iso === "IN" && d.length > 5 ? d.slice(0, 5) + " " + d.slice(5) : d;
   phone.addEventListener("input", () => {
-    const d = digits(phone.value);
+    if (!picking) typed = phone.value.replace(/\D/g, "").slice(0, 15);
+    const d = typed.slice(0, country.len[1]);
+    if (!picking) typed = d;                     // can't type past the active country's length
     phone.value = pretty(d);
     continueBtn.disabled = d.length < country.len[0] || d.length > country.len[1];
   });
@@ -651,11 +787,11 @@
   });
   async function showPhone({ enter = true } = {}) {
     if (switching) return;
-    stopTimer();
+    stopTimer(); stopWebOtp();
     if (enter) await switchStep(false, true);
     else { overlay.classList.remove("otp"); stepOtp.classList.add("hidden"); stepPhone.classList.remove("hidden"); }
     // on phones the sheet opens without the keyboard (tap the field to type), as in the Figma flow
-    if (enter || !isPhone()) setTimeout(() => phone.focus(), 60);
+    if (enter || !isPhone()) setTimeout(() => phone.focus({ preventScroll: true }), 60);
   }
 
   // ---- step 2: OTP ----
@@ -664,7 +800,8 @@
     resetCode();
     await switchStep(true, false);
     startTimer();
-    setTimeout(() => code.focus(), 250);
+    startWebOtp();
+    setTimeout(() => code.focus({ preventScroll: true }), 250);
   }
   function resetCode() {
     code.value = ""; code.disabled = false; busy = false;
@@ -832,7 +969,7 @@
     drag.v = (e.clientY - drag.lastY) / Math.max(1, now - drag.lastT);
     drag.lastY = e.clientY; drag.lastT = now;
     wrap.style.transform = `translateY(${drag.dy}px)`;
-    overlay.style.setProperty("--scrim", String(Math.max(0, 1 - Math.max(0, drag.dy) / 420)));
+    overlay.style.setProperty("--drag", String(Math.max(0, 1 - Math.max(0, drag.dy) / 420)));
   });
   const endDrag = () => {
     if (!drag) return;
@@ -840,21 +977,58 @@
     if (dy > 110 || (v > 0.5 && dy > 24)) { close(); return; }
     wrap.classList.add("settle");                            // spring back
     wrap.style.transform = "";
-    overlay.style.removeProperty("--scrim");
+    overlay.style.removeProperty("--drag");
     setTimeout(() => wrap.classList.remove("settle"), 300);
   };
   dialog.addEventListener("pointerup", endDrag);
   dialog.addEventListener("pointercancel", endDrag);
 
-  // ---- phone: keep the sheet above the on-screen keyboard ----
+  // ---- phone: size the overlay to the *visible* viewport so the on-screen keyboard never covers the sheet ----
+  // iOS Safari and Android Chrome both shrink visualViewport (not the layout viewport) when the keyboard opens.
+  const root = document.documentElement;
+  // Keyboard detection works whether the browser shrinks only the visual viewport (iOS Safari, Chrome)
+  // or the whole layout viewport (Samsung Internet, Firefox, some WebViews): compare against the tallest
+  // height seen for the current width while an input has focus.
+  const tallest = {};
+  const fit = () => {
+    const vv = window.visualViewport;
+    const h = vv ? vv.height : window.innerHeight;
+    const top = vv ? vv.offsetTop : 0;
+    const w = Math.round(window.innerWidth);
+    tallest[w] = Math.max(tallest[w] || 0, h, window.innerHeight);
+    root.style.setProperty("--vvh", h + "px");
+    root.style.setProperty("--vv-top", top + "px");
+    const typing = document.activeElement && document.activeElement.tagName === "INPUT";
+    const kbOpen = isPhone() && typing && (h < tallest[w] * 0.85 || window.innerHeight - h > 120);
+    root.classList.toggle("kb", !!kbOpen);
+    root.classList.toggle("short", isPhone() && h < 520);
+    if (menuOpen && menuOpen()) placeMenu();
+  };
+  fit();
   if (window.visualViewport) {
-    const fit = () => {
-      const kb = Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop);
-      overlay.style.paddingBottom = isPhone() && kb > 80 ? kb + "px" : "";
-    };
     visualViewport.addEventListener("resize", fit);
     visualViewport.addEventListener("scroll", fit);
   }
+  window.addEventListener("resize", fit);
+  window.addEventListener("orientationchange", () => setTimeout(fit, 250));
+  document.addEventListener("focusin", () => setTimeout(fit, 300));    // some Android builds resize late
+  document.addEventListener("focusout", () => setTimeout(fit, 300));
+
+  // field focus ring without :has() (older Safari / Firefox)
+  phone.addEventListener("focus", () => phoneField.classList.add("focused"));
+  phone.addEventListener("blur", () => phoneField.classList.remove("focused"));
+
+  // ---- Android Chrome: read the SMS code automatically (WebOTP); iOS uses autocomplete="one-time-code" ----
+  let otpAbort = null;
+  function startWebOtp() {
+    if (!("OTPCredential" in window) || !navigator.credentials) return;
+    stopWebOtp();
+    otpAbort = new AbortController();
+    navigator.credentials.get({ otp: { transport: ["sms"] }, signal: otpAbort.signal })
+      .then(cred => { if (cred && cred.code && !stepOtp.classList.contains("hidden")) { code.value = cred.code.slice(0, 4); code.dispatchEvent(new Event("input")); } })
+      .catch(() => {});
+  }
+  function stopWebOtp() { if (otpAbort) { otpAbort.abort(); otpAbort = null; } }
 
   console.info("Save8 login prototype: use OTP 1111 to sign in; any other code shows the incorrect-code state.");
 })();
