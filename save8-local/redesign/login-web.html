@@ -56,15 +56,15 @@
   }
   /* Dark theme: the user's dark palette from the Figma dark frames. Follows the system unless the page forces a theme. */
   :root[data-theme="dark"] {
-    --ink: #F6F4EE; --body: #C4C1B8; --muted: #A3A097; --placeholder: #8B8A83;
-    --page: #20221D; --surface: #161814; --bg: #0B0C0A;
-    --line: rgba(246, 244, 238, .12); --line-strong: rgba(246, 244, 238, .2);
+    --ink: #F6F4EE; --body: #C4C1B8; --muted: #A9A69D; --placeholder: #96948C;
+    --page: #2A2C26; --surface: #1F211D; --bg: #0B0C0A;   /* lifted (user: dark was too dark); near save8.ai's #202023 */
+    --line: rgba(246, 244, 238, .14); --line-strong: rgba(246, 244, 238, .22);
     --link: #7FA7FF; --green: #43D895; --red: #F87171; --header-green: #0B1D14;
     --disabled-bg: rgba(246, 244, 238, .06); --disabled-fg: rgba(246, 244, 238, .32);
     --tint: rgba(246, 244, 238, .07); --tint-soft: rgba(246, 244, 238, .05);
     --dot: rgba(246, 244, 238, .25); --grabber: rgba(246, 244, 238, .2);
-    --surface-hover: #1E201B; --outline-bg: #1C1C1E; --outline-border: rgba(244, 244, 245, .2);
-    --scrim: 0, 0, 0; --scrim-alpha: .62; --shadow: rgba(0, 0, 0, .5);
+    --surface-hover: #2A2C27; --outline-bg: #272924; --outline-border: rgba(244, 244, 245, .2);
+    --scrim: 0, 0, 0; --scrim-alpha: .38; --shadow: rgba(0, 0, 0, .45);
     color-scheme: dark;
   }
 
@@ -162,6 +162,9 @@
   /* Zoomed illustration, as in Figma: 416×394 at (-22, 86) in the 372×504 card, bleeding past the card edges */
   .slide img { position: absolute; left: -22px; top: 86px; width: 416px; height: 394px; object-fit: contain; border-radius: 16px; margin: 0; }
   .dots { position: absolute; left: 28px; bottom: 28px; z-index: 2; display: flex; gap: 6px; }
+  /* dark renders have a near-black backdrop; let it take on the card colour instead of showing as a black box */
+  :root[data-theme="dark"] .slide { background: var(--page); }   /* backdrop for the blend (the track is its own layer) */
+  :root[data-theme="dark"] .slide img { mix-blend-mode: lighten; }
   .dots button { width: 6px; height: 6px; padding: 0; border: 0; border-radius: 3px; background: var(--dot); transition: width .25s, background .25s; }
   .dots button.active { width: 18px; background: var(--ink); }
 
